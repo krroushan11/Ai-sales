@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Sales Forecasting System</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #151820;
+      --surface2: #1c2030;
+      --border: rgba(255,255,255,0.07);
+      --border2: rgba(255,255,255,0.13);
+      --text: #e8eaf0;
+      --muted: #7a8099;
+      --accent: #4f8ef7;
+      --accent2: #38d4a0;
+      --amber: #f5a623;
+      --red: #f76f6f;
+      --purple: #a78bfa;
+      --font: 'DM Sans', sans-serif;
+      --mono: 'DM Mono', monospace;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    /* ---- TOP BAR ---- */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-brand { display: flex; align-items: center; gap: 10px; }
+    .topbar-logo {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 600; color: #fff;
+    }
+    .topbar-title { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+    .topbar-sub { font-size: 11px; color: var(--muted); margin-top: 1px; font-family: var(--mono); }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .status-dot {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--accent2); font-family: var(--mono);
+    }
+    .status-dot::before {
+      content: ''; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent2);
+      box-shadow: 0 0 6px var(--accent2);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .topbar-date { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+    /* ---- LAYOUT ---- */
+    .main { max-width: 1280px; margin: 0 auto; padding: 28px 32px 48px; }
+
+    /* ---- PAGE HEADER ---- */
+    .page-header { margin-bottom: 28px; }
+    .page-header h2 { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; }
+    .page-header p { font-size: 13px; color: var(--muted); margin-top: 6px; }
+    .page-header-row { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .controls-row { display: flex; align-items: center; gap: 10px; }
+    .controls-row label { font-size: 12px; color: var(--muted); }
+    .controls-row select {
+      font-family: var(--font); font-size: 13px;
+      padding: 7px 12px; border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: var(--surface2); color: var(--text);
+      cursor: pointer; outline: none;
+    }
+    .controls-row select:focus { border-color: var(--accent); }
+    .ai-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-family: var(--mono);
+      padding: 5px 10px; border-radius: 20px;
+      background: rgba(79,142,247,0.12);
+      border: 1px solid rgba(79,142,247,0.25);
+      color: var(--accent);
+    }
+    .ai-badge::before { content: '⬡'; font-size: 10px; }
+
+    /* ---- METRICS ---- */
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin-bottom: 24px; }
+    .metric-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 20px;
+      transition: border-color 0.2s;
+    }
+    .metric-card:hover { border-color: var(--border2); }
+    .metric-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; font-family: var(--mono); }
+    .metric-card .value { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; }
+    .metric-card .delta { font-size: 12px; margin-top: 6px; font-family: var(--mono); }
+    .delta-up { color: var(--accent2); }
+    .delta-dn { color: var(--red); }
+    .delta-neu { color: var(--muted); }
+
+    /* ---- CARDS ---- */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 22px 24px;
+    }
+    .card-title {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .card-title-left { display: flex; align-items: center; gap: 8px; }
+    .card-icon { font-size: 14px; opacity: 0.6; }
+
+    /* ---- GRID LAYOUTS ---- */
+    .row { display: grid; gap: 14px; margin-bottom: 14px; }
+    .row-3 { grid-template-columns: 2fr 1fr 1fr; }
+    .row-2 { grid-template-columns: 1fr 1fr; }
+    .row-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    .mb14 { margin-bottom: 14px; }
+
+    /* ---- LEGEND ---- */
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+    .legend span { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+    .lsq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+    /* ---- TABLE ---- */
+    .table-wrap { overflow-x: auto; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left; padding: 9px 12px;
+      color: var(--muted); font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+    /* ---- BADGES ---- */
+    .badge {
+      display: inline-block; font-size: 11px;
+      padding: 3px 9px; border-radius: 20px; font-weight: 500; font-family: var(--mono);
+    }
+    .bg { background: rgba(56,212,160,0.12); color: var(--accent2); border: 1px solid rgba(56,212,160,0.2); }
+    .bb { background: rgba(79,142,247,0.12); color: var(--accent); border: 1px solid rgba(79,142,247,0.2); }
+    .ba { background: rgba(245,166,35,0.12); color: var(--amber); border: 1px solid rgba(245,166,35,0.2); }
+    .br { background: rgba(247,111,111,0.12); color: var(--red); border: 1px solid rgba(247,111,111,0.2); }
+    .bp { background: rgba(167,139,250,0.12); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
+
+    /* ---- INSIGHTS ---- */
+    .insight-list { list-style: none; }
+    .insight-list li {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+      font-size: 13px; color: var(--text); line-height: 1.5;
+    }
+    .insight-list li:last-child { border-bottom: none; }
+    .idot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+    .idot-g { background: var(--accent2); box-shadow: 0 0 5px var(--accent2); }
+    .idot-b { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+    .idot-a { background: var(--amber); box-shadow: 0 0 5px var(--amber); }
+    .idot-r { background: var(--red); box-shadow: 0 0 5px var(--red); }
+
+    /* ---- ASK BUTTONS ---- */
+    .ask-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+    .ask-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--font); font-size: 12px;
+      padding: 8px 16px; border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: var(--surface); color: var(--muted);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .ask-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,0.06); }
+
+    /* ---- MINI SPARKLINE ---- */
+    .spark { height: 28px; width: 60px; display: inline-block; vertical-align: middle; }
+
+    /* ---- RESPONSIVE ---- */
+    @media (max-width: 900px) {
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .row-3 { grid-template-columns: 1fr; }
+      .row-2 { grid-template-columns: 1fr; }
+      .main { padding: 20px 16px 40px; }
+      .topbar { padding: 14px 16px; }
+    }
+    @media (max-width: 600px) {
+      .metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">AI</div>
+    <div>
+      <div class="topbar-title">SalesCast AI</div>
+      <div class="topbar-sub">ml-powered forecasting engine v2.4</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="status-dot">Model active</div>
+    <div class="topbar-date" id="liveDate"></div>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- PAGE HEADER -->
+  <div class="page-header">
+    <div class="page-header-row">
+      <div>
+        <h2>Revenue Forecast Dashboard</h2>
+        <p>Linear regression + seasonal decomposition · 6-month training window · ±7% confidence interval</p>
+      </div>
+      <div class="controls-row">
+        <label>Category</label>
+        <select id="categoryFilter" onchange="updateAll()">
+          <option value="all">All products</option>
+          <option value="software">Software</option>
+          <option value="hardware">Hardware</option>
+          <option value="services">Services</option>
+        </select>
+        <span class="ai-badge">AI forecast</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- METRICS -->
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="label">Forecasted revenue (next month)</div>
+      <div class="value" id="forecastRev">—</div>
+      <div class="delta" id="forecastDelta">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Current month actual</div>
+      <div class="value" id="currentRev">—</div>
+      <div class="delta" id="currentDelta">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Forecast accuracy (MAPE)</div>
+      <div class="value" id="accuracy">—</div>
+      <div class="delta delta-neu">model validation score</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Top performing product</div>
+      <div class="value" style="font-size:16px;margin-top:4px;" id="topProduct">—</div>
+      <div class="delta" id="topProductGrowth">—</div>
+    </div>
+  </div>
+
+  <!-- MAIN CHART -->
+  <div class="card mb14">
+    <div class="card-title">
+      <div class="card-title-left">
+        <span class="card-icon">📈</span> Revenue forecast vs actual
+      </div>
+      <span class="badge bb">18-month view</span>
+    </div>
+    <div class="legend">
+      <span><span class="lsq" style="background:#4f8ef7"></span>Actual</span>
+      <span><span class="lsq" style="background:#38d4a0"></span>Forecast</span>
+      <span><span class="lsq" style="background:rgba(56,212,160,0.2);border:1px dashed #38d4a0"></span>Confidence interval</span>
+    </div>
+    <div style="position:relative;width:100%;height:300px;">
+      <canvas id="forecastChart" role="img" aria-label="Line chart showing actual vs AI-forecasted monthly revenue with confidence bands">Revenue trend across 18 months comparing actual and forecasted values.</canvas>
+    </div>
+  </div>
+
+  <!-- ROW: Category + Seasonal -->
+  <div class="row row-2 mb14">
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-left"><span class="card-icon">📊</span> Category breakdown (quarterly)</div>
+      </div>
+      <div class="legend">
+        <span><span class="lsq" style="background:#4f8ef7"></span>Software</span>
+        <span><span class="lsq" style="background:#f5a623"></span>Hardware</span>
+        <span><span class="lsq" style="background:#38d4a0"></span>Services</span>
+      </div>
+      <div style="position:relative;width:100%;height:240px;">
+        <canvas id="categoryChart" role="img" aria-label="Grouped bar chart of revenue by product category per quarter">Software, Hardware, Services revenue per quarter.</canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-left"><span class="card-icon">🌀</span> Seasonal trend index</div>
+      </div>
+      <div class="legend">
+        <span><span class="lsq" style="background:#a78bfa"></span>Seasonal multiplier</span>
+      </div>
+      <div style="position:relative;width:100%;height:240px;">
+        <canvas id="seasonChart" role="img" aria-label="Radar chart of seasonal strength index per month">Monthly seasonal strength across the year.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- FORECAST TABLE -->
+  <div class="card mb14">
+    <div class="card-title">
+      <div class="card-title-left"><span class="card-icon">🗂</span> Product forecast table</div>
+      <span class="badge ba">AI signals</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Category</th>
+            <th>Current ($K)</th>
+            <th>Forecast ($K)</th>
+            <th>Change</th>
+            <th>Confidence</th>
+            <th>Signal</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ROW: Insights + Model Perf -->
+  <div class="row row-2 mb14">
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-left"><span class="card-icon">🤖</span> AI insights</div>
+      </div>
+      <ul class="insight-list" id="insightList"></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">
+        <div class="card-title-left"><span class="card-icon">🎯</span> Model validation (last 6 months)</div>
+      </div>
+      <div class="legend">
+        <span><span class="lsq" style="background:#4f8ef7"></span>Actual</span>
+        <span><span class="lsq" style="background:#f5a623"></span>Predicted</span>
+      </div>
+      <div style="position:relative;width:100%;height:210px;">
+        <canvas id="perfChart" role="img" aria-label="Line chart comparing predicted vs actual values for model accuracy validation">Model accuracy: predicted vs actual over last 6 months.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUGGESTED ACTIONS -->
+  <div class="card">
+    <div class="card-title"><div class="card-title-left"><span class="card-icon">💡</span> Suggested next steps</div></div>
+    <div class="ask-row">
+      <button class="ask-btn" onclick="alert('Open this file in a Claude.ai conversation and click this button there to get AI-powered suggestions!')">Improve hardware sales →</button>
+      <button class="ask-btn" onclick="alert('Open this file in a Claude.ai conversation to get seasonal optimization tips!')">Optimize for seasonality →</button>
+      <button class="ask-btn" onclick="alert('Open this file in a Claude.ai conversation to explore better forecast models!')">Better forecast models →</button>
+      <button class="ask-btn" onclick="alert('Open this file in a Claude.ai conversation to get Q2 planning recommendations!')">Q2 planning recommendations →</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  // Live date
+  const d = new Date();
+  document.getElementById('liveDate').textContent = d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+
+  const BASE_DATA = {
+    all:      [142,158,171,163,185,210,198,224,238,215,252,271,260,285,305,298,320,341],
+    software: [62, 70, 77, 73, 85, 98, 91,104,110, 98,118,127,120,134,145,141,152,163],
+    hardware: [48, 52, 57, 54, 60, 68, 64, 72, 78, 70, 82, 88, 84, 92,100, 97,104,110],
+    services: [32, 36, 37, 36, 40, 44, 43, 48, 50, 47, 52, 56, 56, 59, 60, 60, 64, 68]
+  };
+  const MONTHS = ['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const FORECAST_START = 12;
+  const SEASONAL = [1.03,0.96,0.99,1.04,1.08,1.12,1.02,0.98,0.97,1.01,1.05,1.10];
+
+  function linReg(data) {
+    const n = data.length; let sx=0,sy=0,sxy=0,sx2=0;
+    data.forEach((y,x)=>{sx+=x;sy+=y;sxy+=x*y;sx2+=x*x;});
+    const m=(n*sxy-sx*sy)/(n*sx2-sx*sx), b=(sy-m*sx)/n;
+    return {m,b};
+  }
+
+  function buildForecast(cat) {
+    const data = BASE_DATA[cat];
+    const actual = data.slice(0, FORECAST_START);
+    const {m,b} = linReg(actual);
+    const forecast=[], lo=[], hi=[];
+    for(let i=0;i<18;i++){
+      const f = Math.round((m*i+b)*SEASONAL[i%12]);
+      forecast.push(i>=FORECAST_START?f:null);
+      lo.push(i>=FORECAST_START?Math.round(f*0.93):null);
+      hi.push(i>=FORECAST_START?Math.round(f*1.07):null);
+    }
+    return {actual: data.map((v,i)=>i<FORECAST_START?v:null), forecast, lo, hi, data};
+  }
+
+  let charts = {};
+  function destroyChart(k){ if(charts[k]){charts[k].destroy();delete charts[k];} }
+
+  const CHART_DEFAULTS = {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{legend:{display:false}},
+  };
+  const GRID = { color:'rgba(255,255,255,0.05)' };
+  const TICK = { color:'#7a8099', font:{size:11,family:'DM Mono'} };
+
+  function updateAll(){
+    const cat = document.getElementById('categoryFilter').value;
+    const {actual,forecast,lo,hi,data} = buildForecast(cat);
+
+    // Metrics
+    const cur = data[FORECAST_START-1], prev = data[FORECAST_START-2];
+    const nextF = forecast.find(v=>v!==null);
+    const fDelta = ((nextF-cur)/cur*100).toFixed(1);
+    const cDelta = ((cur-prev)/prev*100).toFixed(1);
+    document.getElementById('forecastRev').textContent = '$'+nextF+'K';
+    document.getElementById('forecastDelta').textContent = (fDelta>=0?'↑ ':'↓ ')+Math.abs(fDelta)+'% vs current';
+    document.getElementById('forecastDelta').className = 'delta '+(fDelta>=0?'delta-up':'delta-dn');
+    document.getElementById('currentRev').textContent = '$'+cur+'K';
+    document.getElementById('currentDelta').textContent = (cDelta>=0?'↑ ':'↓ ')+Math.abs(cDelta)+'% vs last month';
+    document.getElementById('currentDelta').className = 'delta '+(cDelta>=0?'delta-up':'delta-dn');
+    const a6=data.slice(6,12); const {m:m2,b:b2}=linReg(data.slice(0,6));
+    const p6=a6.map((_,i)=>Math.round(m2*(i+6)+b2));
+    const mape=a6.reduce((s,a,i)=>s+Math.abs((a-p6[i])/a),0)/6;
+    document.getElementById('accuracy').textContent = (100-mape*100).toFixed(1)+'%';
+
+    // Table
+    const products = [
+      {name:'CloudSuite Pro',cat:'software',cur:52,fore:61,conf:'High'},
+      {name:'DataBridge',cat:'software',cur:38,fore:41,conf:'High'},
+      {name:'ServerX 4000',cat:'hardware',cur:44,fore:46,conf:'Med'},
+      {name:'NetSwitch Pro',cat:'hardware',cur:28,fore:25,conf:'Med'},
+      {name:'Analytics Plus',cat:'software',cur:31,fore:37,conf:'High'},
+      {name:'Cloud Support',cat:'services',cur:35,fore:39,conf:'High'},
+      {name:'Storage Array',cat:'hardware',cur:21,fore:23,conf:'Low'},
+      {name:'Managed IT',cat:'services',cur:22,fore:24,conf:'Med'},
+    ];
+    const filtered = cat==='all' ? products : products.filter(p=>p.cat===cat);
+    let topName='', topGrowth=-Infinity;
+    document.getElementById('tableBody').innerHTML = filtered.map(p=>{
+      const chg=((p.fore-p.cur)/p.cur*100).toFixed(1), pct=parseFloat(chg);
+      if(pct>topGrowth){topGrowth=pct;topName=p.name;}
+      const chgBadge=pct>5?'bg':pct>0?'ba':'br';
+      const sigBadge=pct>5?'bg':'ba', sig=pct>5?'Buy':'Hold';
+      const confBadge=p.conf==='High'?'bg':p.conf==='Med'?'ba':'br';
+      return `<tr>
+        <td style="font-weight:500">${p.name}</td>
+        <td><span class="badge bb">${p.cat}</span></td>
+        <td style="font-family:var(--mono)">$${p.cur}K</td>
+        <td style="font-family:var(--mono)">$${p.fore}K</td>
+        <td><span class="badge ${chgBadge}">${pct>=0?'+':''}${chg}%</span></td>
+        <td><span class="badge ${confBadge}">${p.conf}</span></td>
+        <td><span class="badge ${sigBadge}">${sig}</span></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('topProduct').textContent = topName;
+    document.getElementById('topProductGrowth').textContent = '↑ '+topGrowth.toFixed(1)+'% forecast growth';
+    document.getElementById('topProductGrowth').className = 'delta delta-up';
+
+    // Insights
+    const insightMap = {
+      all:[
+        {c:'idot-g',t:'Revenue trend shows 8.4% avg monthly growth — on track to exceed annual target by 12%.'},
+        {c:'idot-b',t:'Q4 seasonal uplift expected: model detects 10–12% surge in Nov–Dec across all categories.'},
+        {c:'idot-a',t:'Hardware deceleration detected. NetSwitch Pro predicted to decline 10.7% next month.'},
+        {c:'idot-g',t:'CloudSuite Pro leads growth at +17.3% — recommend increasing marketing spend now.'},
+        {c:'idot-r',t:'Confidence intervals widen beyond month 2 — reforecast recommended for Q2 planning.'},
+      ],
+      software:[
+        {c:'idot-g',t:'Software revenue up 17.3% YoY. SaaS renewal rates at all-time high.'},
+        {c:'idot-b',t:'Analytics Plus accelerating — potential to overtake DataBridge by Q3.'},
+        {c:'idot-a',t:'DataBridge growth slowing — competitive displacement risk detected.'},
+      ],
+      hardware:[
+        {c:'idot-a',t:'Hardware growth decelerating. Supply chain lead times spiking — watch margins.'},
+        {c:'idot-r',t:'NetSwitch Pro forecast down 10.7% — inventory drawdown recommended.'},
+        {c:'idot-g',t:'ServerX 4000 stable at 4.5% growth despite category headwinds.'},
+      ],
+      services:[
+        {c:'idot-g',t:'Services ARR growing steadily — 11.4% forecast for next quarter.'},
+        {c:'idot-b',t:'Managed IT contracts set to expand. Upsell opportunity in 3 accounts.'},
+        {c:'idot-a',t:'Cloud Support scaling required — capacity may constrain H2 growth.'},
+      ]
+    };
+    document.getElementById('insightList').innerHTML = (insightMap[cat]||insightMap.all).map(i=>`
+      <li><span class="idot ${i.c}"></span><span>${i.t}</span></li>`).join('');
+
+    // Forecast Chart
+    destroyChart('fc');
+    charts.fc = new Chart(document.getElementById('forecastChart'),{
+      data:{labels:MONTHS, datasets:[
+        {type:'line',label:'Actual',data:actual,borderColor:'#4f8ef7',backgroundColor:'rgba(79,142,247,0.07)',borderWidth:2,pointRadius:3,pointBackgroundColor:'#4f8ef7',tension:0.35,spanGaps:false},
+        {type:'line',label:'Forecast',data:forecast,borderColor:'#38d4a0',backgroundColor:'rgba(56,212,160,0.06)',borderWidth:2,borderDash:[5,4],pointRadius:3,pointBackgroundColor:'#38d4a0',tension:0.35,spanGaps:false},
+        {type:'line',label:'Upper',data:hi,borderColor:'rgba(56,212,160,0.2)',backgroundColor:'rgba(56,212,160,0.08)',borderWidth:1,borderDash:[2,3],pointRadius:0,fill:'+1',tension:0.35,spanGaps:false},
+        {type:'line',label:'Lower',data:lo,borderColor:'rgba(56,212,160,0.2)',backgroundColor:'rgba(56,212,160,0.08)',borderWidth:1,borderDash:[2,3],pointRadius:0,fill:false,tension:0.35,spanGaps:false},
+      ]},
+      options:{...CHART_DEFAULTS, scales:{
+        x:{ticks:TICK, grid:GRID},
+        y:{ticks:{...TICK, callback:v=>'$'+v+'K'}, grid:GRID}
+      }}
+    });
+
+    // Model Perf Chart
+    destroyChart('pf');
+    charts.pf = new Chart(document.getElementById('perfChart'),{
+      type:'line',
+      data:{labels:MONTHS.slice(6,12), datasets:[
+        {label:'Actual',data:a6,borderColor:'#4f8ef7',borderWidth:2,pointRadius:3,pointBackgroundColor:'#4f8ef7',tension:0.3,backgroundColor:'rgba(79,142,247,0.06)'},
+        {label:'Predicted',data:p6,borderColor:'#f5a623',borderWidth:2,borderDash:[4,3],pointRadius:3,pointBackgroundColor:'#f5a623',tension:0.3,backgroundColor:'rgba(245,166,35,0.04)'}
+      ]},
+      options:{...CHART_DEFAULTS, scales:{
+        x:{ticks:TICK, grid:GRID},
+        y:{ticks:{...TICK, callback:v=>'$'+v+'K'}, grid:GRID}
+      }}
+    });
+  }
+
+  // Category Chart (static)
+  charts.cat = new Chart(document.getElementById('categoryChart'),{
+    type:'bar',
+    data:{
+      labels:['Q1','Q2','Q3','Q4'],
+      datasets:[
+        {label:'Software',data:[209,281,328,393],backgroundColor:'rgba(79,142,247,0.8)',borderRadius:4},
+        {label:'Hardware',data:[157,192,230,301],backgroundColor:'rgba(245,166,35,0.8)',borderRadius:4},
+        {label:'Services',data:[105,127,149,183],backgroundColor:'rgba(56,212,160,0.8)',borderRadius:4},
+      ]
+    },
+    options:{...CHART_DEFAULTS, scales:{
+      x:{ticks:TICK, grid:GRID},
+      y:{ticks:{...TICK, callback:v=>'$'+v+'K'}, grid:GRID}
+    }}
+  });
+
+  // Seasonal Radar Chart
+  charts.sea = new Chart(document.getElementById('seasonChart'),{
+    type:'radar',
+    data:{
+      labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+      datasets:[{
+        label:'Seasonal index',
+        data:SEASONAL,
+        borderColor:'#a78bfa',
+        backgroundColor:'rgba(167,139,250,0.12)',
+        borderWidth:2, pointRadius:3, pointBackgroundColor:'#a78bfa'
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{r:{
+        ticks:{color:'#7a8099', font:{size:10,family:'DM Mono'}, stepSize:0.05, backdropColor:'transparent'},
+        grid:{color:'rgba(255,255,255,0.06)'},
+        angleLines:{color:'rgba(255,255,255,0.06)'},
+        pointLabels:{color:'#7a8099', font:{size:11,family:'DM Mono'}}
+      }}
+    }
+  });
+
+  updateAll();
+</script>
+</body>
+</html>
